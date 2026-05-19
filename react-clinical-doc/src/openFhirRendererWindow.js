@@ -38,6 +38,16 @@ export function openFhirRendererWindow(fhirContent) {
         table.fhir-section-table tr.section-title-row th {
           background: #e0e7ef;
           font-size: 1.1em;
+          cursor: pointer;
+          user-select: none;
+        }
+        .caret {
+          display: inline-block;
+          margin-right: 0.5em;
+          transition: transform 0.2s;
+        }
+        .caret.collapsed {
+          transform: rotate(-90deg);
         }
       </style>
       <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -79,7 +89,13 @@ export function openFhirRendererWindow(fhirContent) {
             }
           }, [fhirContent]);
 
-          // Helper to render a section row
+          // Collapsible state for each section
+          const [collapsed, setCollapsed] = useState({});
+
+          function toggleSection(idx) {
+            setCollapsed(prev => ({ ...prev, [idx]: !prev[idx] }));
+          }
+
           function renderSectionRow(section, idx) {
             const title = section.title;
             let html = '';
@@ -93,14 +109,24 @@ export function openFhirRendererWindow(fhirContent) {
             // If the section text contains a <table>, render it full width
             let tableHtml = '';
             if (html.includes('<table')) {
-              // Extract and style all tables
               tableHtml = html.replace(/<table/gi, '<table class="fhir-section-table"');
             }
+            const isCollapsed = !!collapsed[idx];
             return [
-              React.createElement('tr', { key: '', className: 'section-title-row' },
-                React.createElement('th', { colSpan: 2 }, title)
+              React.createElement('tr', { key: 'title-' + idx, className: 'section-title-row' },
+                React.createElement('th', {
+                  colSpan: 2,
+                  onClick: function () { toggleSection(idx); },
+                  style: { cursor: 'pointer' }
+                },
+                  React.createElement('span', {
+                    className: 'caret' + (isCollapsed ? ' collapsed' : ''),
+                    style: { fontSize: '0.8em' }
+                  }, isCollapsed ? '\u25B6' : '\u25BC'),
+                  title
+                )
               ),
-              React.createElement('tr', { key: '' },
+              !isCollapsed && React.createElement('tr', { key: 'text-' + idx },
                 React.createElement('td', { colSpan: 2, style: { background: '#fff' }, dangerouslySetInnerHTML: { __html: tableHtml || html } })
               )
             ];
@@ -109,17 +135,44 @@ export function openFhirRendererWindow(fhirContent) {
           return React.createElement('div', { style: { maxWidth: '100%' } },
             error && React.createElement('div', { style: { color: 'red', marginBottom: '1rem' } }, error),
             doc && React.createElement(Fragment, null,
-              React.createElement('h2', null, 'Document Text'),
+              React.createElement('div', { style: { marginBottom: '1rem' } },
+                React.createElement('button', {
+                  style: { marginRight: '0.5em', padding: '0.4em 1em', fontSize: '1em' },
+                  onClick: expandAll
+                }, 'Expand All'),
+                React.createElement('button', {
+                  style: { padding: '0.4em 1em', fontSize: '1em' },
+                  onClick: collapseAll
+                }, 'Collapse All')
+              ),
+              React.createElement('h2', null, 'FHIR Document Renderer'),
               doc.docText
                 ? React.createElement('div', { style: { border: '1px solid #ccc', padding: '1rem', marginBottom: '2rem' }, dangerouslySetInnerHTML: { __html: doc.docText } })
                 : React.createElement('div', { style: { border: '1px solid #ccc', padding: '1rem', marginBottom: '2rem', fontStyle: 'italic', color: '#888' } }, 'No document narrative text.'),
               doc.sections && doc.sections.length > 0 && React.createElement('table', { className: 'fhir-section-table' },
                 React.createElement('tbody', null,
-                  doc.sections.flatMap((section, idx) => renderSectionRow(section, idx))
+                  doc.sections.flatMap(function(section, idx) { return renderSectionRow(section, idx); })
                 )
               )
             )
           );
+                  function collapseAll() {
+                    if (!doc || !doc.sections) return;
+                    var newState = {};
+                    for (var i = 0; i < doc.sections.length; i++) {
+                      newState[i] = true;
+                    }
+                    setCollapsed(newState);
+                  }
+
+                  function expandAll() {
+                    if (!doc || !doc.sections) return;
+                    var newState = {};
+                    for (var i = 0; i < doc.sections.length; i++) {
+                      newState[i] = false;
+                    }
+                    setCollapsed(newState);
+                  }
         }
         ReactDOM.createRoot(document.getElementById('root')).render(
           React.createElement(FhirDocumentRenderer, { fhirContent: window.fhirContent })
